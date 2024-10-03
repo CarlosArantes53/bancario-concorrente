@@ -14,7 +14,7 @@ def realizar_transacao(id_cliente):
                 s.connect((HOST, PORT))
                 break
             except ConnectionRefusedError:
-                print(f"Cliente {id_cliente}: Conexão recusada, tentando novamente...")
+                print(f"Cliente {id_cliente}: Conexão recusada")
                 time.sleep(1)
 
         operacoes = ['consulta', 'deposito', 'saque', 'transferencia']

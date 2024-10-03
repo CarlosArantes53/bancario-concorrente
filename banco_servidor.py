@@ -1,7 +1,6 @@
 import socket
 import threading
 import json
-import time
 from threading import Lock, Semaphore
 
 HOST = 'localhost'
@@ -35,7 +34,7 @@ def processar_cliente(conexao, endereco):
                 dados = dados.decode('utf-8')
                 operacao = json.loads(dados)
                 resposta = processar_operacao(operacao)
-                conexao.sendall(json.dumps(resposta).encode('utf-8'))
+                conexao.sendall(json.dumps(resposta, indent=4).encode('utf-8'))  # Adicionado indentação
             except Exception as e:
                 print(f"Erro no processamento do cliente {endereco}: {e}")
                 break
@@ -60,7 +59,7 @@ def processar_operacao(operacao):
 def consultar_saldo(id_conta):
     with contas_lock:
         saldo = contas.get(id_conta, 0)
-        return {'status': 'sucesso', 'saldo': saldo}
+        return {'OP': 'Consultar', 'status': 'sucesso', 'saldo': saldo}
 
 def depositar(id_conta, valor):
     with semaforo:
@@ -68,7 +67,7 @@ def depositar(id_conta, valor):
             saldo = contas.get(id_conta, 0)
             contas[id_conta] = saldo + valor
             salvar_contas()
-            return {'status': 'sucesso', 'saldo': contas[id_conta]}
+            return {'OP': 'Deposito', 'status': 'sucesso', 'valor': valor, 'saldo_atual': contas[id_conta]}
 
 def sacar(id_conta, valor):
     with semaforo:
@@ -77,9 +76,9 @@ def sacar(id_conta, valor):
             if saldo >= valor:
                 contas[id_conta] = saldo - valor
                 salvar_contas()
-                return {'status': 'sucesso', 'saldo': contas[id_conta]}
+                return {'OP': 'Saque', 'status': 'sucesso', 'valor': valor, 'saldo_atual': contas[id_conta]}
             else:
-                return {'status': 'falha', 'mensagem': 'Saldo insuficiente'}
+                return {'OP': 'Saque', 'status': 'falha', 'mensagem': 'Saldo insuficiente', 'valor_tentado': valor, 'saldo_atual': saldo}
 
 def transferir(id_origem, id_destino, valor):
     with semaforo:
@@ -89,9 +88,9 @@ def transferir(id_origem, id_destino, valor):
                 contas[id_origem] = saldo_origem - valor
                 contas[id_destino] = contas.get(id_destino, 0) + valor
                 salvar_contas()
-                return {'status': 'sucesso', 'saldo_origem': contas[id_origem], 'saldo_destino': contas[id_destino]}
+                return {'OP': 'Transferencia', 'status': 'sucesso', 'valor': valor, 'saldo_origem_atual': contas[id_origem], 'saldo_destino_atual': contas[id_destino]}
             else:
-                return {'status': 'falha', 'mensagem': 'Saldo insuficiente'}
+                return {'OP': 'Transferencia', 'status': 'falha', 'mensagem': 'Saldo insuficiente', 'valor_tentado': valor, 'saldo_origem_atual': saldo_origem}
 
 def iniciar_servidor():
     carregar_contas()
@@ -99,7 +98,7 @@ def iniciar_servidor():
         s.bind((HOST, PORT))
         s.listen()
 
-        print(f'Servidor bancário rodando em {HOST}:{PORT}')
+        print(f'Server {HOST}:{PORT}')
         while True:
             conexao, endereco = s.accept()
             threading.Thread(target=processar_cliente, args=(conexao, endereco)).start()
