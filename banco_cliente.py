@@ -14,27 +14,21 @@ def realizar_transacao(id_cliente):
                 s.connect((HOST, PORT))
                 break
             except ConnectionRefusedError:
-                print(f"Cliente {id_cliente}: Conexão recusada")
                 time.sleep(1)
 
         operacoes = ['consulta', 'deposito', 'saque', 'transferencia']
         tipo = random.choice(operacoes)
 
-        if tipo == 'consulta':
-            transacao = {'tipo': 'consulta', 'id_conta': id_cliente}
-        elif tipo == 'deposito':
-            valor = random.randint(10, 1000)
-            transacao = {'tipo': 'deposito', 'id_conta': id_cliente, 'valor': valor}
+        transacao = {'tipo': tipo, 'id_conta': id_cliente}
+        if tipo == 'deposito':
+            transacao['valor'] = random.randint(10, 1000)
         elif tipo == 'saque':
-            valor = random.randint(10, 500)
-            transacao = {'tipo': 'saque', 'id_conta': id_cliente, 'valor': valor}
+            transacao['valor'] = random.randint(10, 500)
         elif tipo == 'transferencia':
-            conta_destino = random.randint(1, 5)
-            valor = random.randint(10, 500)
-            transacao = {'tipo': 'transferencia', 'id_conta': id_cliente, 'conta_destino': conta_destino, 'valor': valor}
+            transacao['conta_destino'] = random.randint(1, 5)
+            transacao['valor'] = random.randint(10, 500)
 
         s.sendall(json.dumps(transacao).encode('utf-8'))
-        
         resposta = s.recv(1024)
         print(f'Cliente {id_cliente}: {resposta.decode("utf-8")}')
         time.sleep(random.uniform(0.01, 0.5))
@@ -52,6 +46,6 @@ def simular_clientes(num_clientes, num_transacoes):
         t.join()
 
 if __name__ == '__main__':
-    num_clientes = int(input("Clientes:"))
-    num_transacoes = int(input("Transações:"))
+    num_clientes = int(input("Clientes: "))
+    num_transacoes = int(input("Transações: "))
     simular_clientes(num_clientes, num_transacoes)

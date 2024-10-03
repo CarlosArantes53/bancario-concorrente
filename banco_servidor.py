@@ -10,8 +10,6 @@ PORT = 5000
 semaforo = Semaphore()
 contas_lock = Lock()
 contas = {}
-transacoes_lock = Lock()
-transacoes = []
 
 def carregar_contas():
     global contas
@@ -25,35 +23,40 @@ def salvar_contas():
     with open('contas.json', 'w') as f:
         json.dump(contas, f, indent=4)
 
-def salvar_transacoes():
+def registrar_transacao(operacao, resposta):
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+    transacao = {
+        'timestamp': timestamp,
+        'operacao': operacao,
+        'resposta': resposta
+    }
+    
+    try:
+        with open('transacoes.json', 'r') as f:
+            transacoes = json.load(f)
+    except FileNotFoundError:
+        transacoes = []
+
+    transacoes.append(transacao)
+
     with open('transacoes.json', 'w') as f:
         json.dump(transacoes, f, indent=4)
-
-def registrar_transacao(operacao, resposta):
-    with transacoes_lock:
-        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-        transacao = {'timestamp': timestamp, 'operacao': operacao, 'resposta': resposta}
-        transacoes.append(transacao)
-        salvar_transacoes()
-
 
 
 def processar_cliente(conexao, endereco):
     with conexao:
         print(f'Conectado a {endereco}')
-        
         while True:
             try:
                 dados = conexao.recv(1024)
                 if not dados:
                     break
-                dados = dados.decode('utf-8')
-                operacao = json.loads(dados)
+                operacao = json.loads(dados.decode('utf-8'))
                 resposta = processar_operacao(operacao)
-                conexao.sendall(json.dumps(resposta, indent=4).encode('utf-8'))
+                conexao.sendall(json.dumps(resposta).encode('utf-8'))
                 registrar_transacao(operacao, resposta)
             except Exception as e:
-                print(f"Erro no processamento do cliente {endereco}: {e}")
+                print(f"Erro {endereco}: {e}")
                 break
 
 def processar_operacao(operacao):
@@ -63,15 +66,11 @@ def processar_operacao(operacao):
     if tipo == 'consulta':
         return consultar_saldo(id_conta)
     elif tipo == 'deposito':
-        valor = operacao['valor']
-        return depositar(id_conta, valor)
+        return depositar(id_conta, operacao['valor'])
     elif tipo == 'saque':
-        valor = operacao['valor']
-        return sacar(id_conta, valor)
+        return sacar(id_conta, operacao['valor'])
     elif tipo == 'transferencia':
-        conta_destino = operacao['conta_destino']
-        valor = operacao['valor']
-        return transferir(id_conta, conta_destino, valor)
+        return transferir(id_conta, operacao['conta_destino'], operacao['valor'])
 
 def consultar_saldo(id_conta):
     with contas_lock:
@@ -81,8 +80,7 @@ def consultar_saldo(id_conta):
 def depositar(id_conta, valor):
     with semaforo:
         with contas_lock:
-            saldo = contas.get(id_conta, 0)
-            contas[id_conta] = saldo + valor
+            contas[id_conta] = contas.get(id_conta, 0) + valor
             salvar_contas()
             return {'OP': 'Deposito', 'status': 'sucesso', 'valor': valor, 'saldo_atual': contas[id_conta]}
 
@@ -95,7 +93,7 @@ def sacar(id_conta, valor):
                 salvar_contas()
                 return {'OP': 'Saque', 'status': 'sucesso', 'valor': valor, 'saldo_atual': contas[id_conta]}
             else:
-                return {'OP': 'Saque', 'status': 'falha', 'mensagem': 'Saldo insuficiente', 'valor_tentado': valor, 'saldo_atual': saldo}
+                return {'OP': 'Saque', 'status': 'falha', 'mensagem': 'Saldo insuficiente', 'saldo_atual': saldo}
 
 def transferir(id_origem, id_destino, valor):
     with semaforo:
@@ -105,16 +103,15 @@ def transferir(id_origem, id_destino, valor):
                 contas[id_origem] = saldo_origem - valor
                 contas[id_destino] = contas.get(id_destino, 0) + valor
                 salvar_contas()
-                return {'OP': 'Transferencia', 'status': 'sucesso', 'valor': valor, 'saldo_origem_atual': contas[id_origem], 'saldo_destino_atual': contas[id_destino]}
+                return {'OP': 'Transferencia', 'status': 'sucesso', 'valor': valor, 'saldo_origem': contas[id_origem], 'saldo_destino': contas[id_destino]}
             else:
-                return {'OP': 'Transferencia', 'status': 'falha', 'mensagem': 'Saldo insuficiente', 'valor_tentado': valor, 'saldo_origem_atual': saldo_origem}
+                return {'OP': 'Transferencia', 'status': 'falha', 'mensagem': 'Saldo insuficiente', 'saldo_origem': saldo_origem}
 
 def iniciar_servidor():
     carregar_contas()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, PORT))
         s.listen()
-
         print(f'Server {HOST}:{PORT}')
         while True:
             conexao, endereco = s.accept()
