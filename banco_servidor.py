@@ -51,7 +51,7 @@ def processar_cliente(conexao, endereco):
                 operacao = json.loads(dados)
                 resposta = processar_operacao(operacao)
                 conexao.sendall(json.dumps(resposta, indent=4).encode('utf-8'))
-                registrar_transacao(operacao, resposta) # Registra a transação
+                registrar_transacao(operacao, resposta)
             except Exception as e:
                 print(f"Erro no processamento do cliente {endereco}: {e}")
                 break
