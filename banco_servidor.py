@@ -2,6 +2,7 @@ import socket
 import threading
 import json
 from threading import Lock, Semaphore
+import datetime
 
 HOST = 'localhost'
 PORT = 5000
@@ -9,6 +10,8 @@ PORT = 5000
 semaforo = Semaphore()
 contas_lock = Lock()
 contas = {}
+transacoes_lock = Lock()
+transacoes = []
 
 def carregar_contas():
     global contas
@@ -20,7 +23,20 @@ def carregar_contas():
 
 def salvar_contas():
     with open('contas.json', 'w') as f:
-        json.dump(contas, f)
+        json.dump(contas, f, indent=4)
+
+def salvar_transacoes():
+    with open('transacoes.json', 'w') as f:
+        json.dump(transacoes, f, indent=4)
+
+def registrar_transacao(operacao, resposta):
+    with transacoes_lock:
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+        transacao = {'timestamp': timestamp, 'operacao': operacao, 'resposta': resposta}
+        transacoes.append(transacao)
+        salvar_transacoes()
+
+
 
 def processar_cliente(conexao, endereco):
     with conexao:
@@ -34,7 +50,8 @@ def processar_cliente(conexao, endereco):
                 dados = dados.decode('utf-8')
                 operacao = json.loads(dados)
                 resposta = processar_operacao(operacao)
-                conexao.sendall(json.dumps(resposta, indent=4).encode('utf-8'))  # Adicionado indentação
+                conexao.sendall(json.dumps(resposta, indent=4).encode('utf-8'))
+                registrar_transacao(operacao, resposta) # Registra a transação
             except Exception as e:
                 print(f"Erro no processamento do cliente {endereco}: {e}")
                 break
